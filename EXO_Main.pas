@@ -1,0 +1,147 @@
+unit EXO_Main;
+
+interface
+
+uses SysUtils, Windows, EXO_Offsets, EXO_Drawing, EXO_Hooking;
+
+procedure EXO_Aimbot;
+procedure EXO_ESPBox;
+procedure EXO_Trigger;
+procedure EXO_HookEngine;
+
+function EXO_GetModuleInfo: Boolean;
+function EXO_PlayerInfo:    Boolean;
+
+implementation
+
+function EXO_PlayerInfo: Boolean;
+var
+  i: Integer;
+  ToVector: vec3_type;
+begin
+
+  LocalPlayer.Team   := Hook_GetPoint(dwPBase + oTeam,   SizeOf(Integer));
+  LocalPlayer.Health := Hook_GetPoint(dwPBase + oHealth, SizeOf(Integer));
+  LocalPlayer.fFlags  := Hook_GetPoint(dwPBase + oFlags,  SizeOf(Integer));
+
+  iCount := 1;
+
+  for i := 1 to 64 do
+  begin
+
+    dwEntity := Hook_GetPoint((dwClient + oEntity) + (i * oDent), SizeOf(DWORD));
+    if dwEntity = 0 then Continue;
+
+    TempPlayer.Team    :=  Hook_GetPoint((dwEntity + oTeam),   SizeOf(Integer));
+    TempPlayer.Health  :=  Hook_GetPoint((dwEntity + oHealth), SizeOf(Integer));
+
+    if (TempPlayer.Team > 1) and (TempPlayer.Health > 0) then
+    begin
+      iEnemies[iCount] := Hook_GetPoint(dwEntity + oEntID, SizeOf(Integer));
+
+      Player[iCount].Origin.x := Hook_GetPoint(dwEntity + oX, SizeOf(Single));
+      Player[iCount].Origin.y := Hook_GetPoint(dwEntity + oY, SizeOf(Single));
+      Player[iCount].Origin.z := Hook_GetPoint(dwEntity + oZ, SizeOf(Single));
+
+      Player[iCount].Team     := Hook_GetPoint((dwEntity + oTeam),   SizeOf(Integer));
+      Player[iCount].Health   := Hook_GetPoint(dwEntity + oHealth, SizeOf(Integer));
+      Player[iCount].fFlags   := Hook_GetPoint(dwEntity + oFlags,  SizeOf(Integer));
+      Player[iCount].Color    := GetColor(Player[iCount].Team);
+
+      if (WorldToScreen(Player[i].Origin, ToVector)) then
+      begin
+        Player[iCount].ScreenPos[1] := Round(ToVector.x);
+        Player[iCount].ScreenPos[2] := Round(ToVector.y);
+      end
+      else
+      begin
+        Player[iCount].ScreenPos[1] := -1;
+        Player[iCount].ScreenPos[2] := -1;
+      end;
+
+      Inc(iCount);
+    end;
+
+  end;
+
+  for i := 1 to iCount do
+
+
+  Result := True;
+end;
+
+procedure EXO_Trigger;
+begin
+
+end;
+
+procedure EXO_Aimbot;
+begin
+
+end;
+
+procedure EXO_ESPBox;
+var
+  Width, Height, i: Integer; Vector: vec3_type; Distance: Single;
+begin
+  for i := 1 to iCount do
+  begin
+    if (Player[i].Health <> 0) and WorldToScreen(Player[i].Origin, Vector) then
+    begin
+      Distance :=
+      Get3D(LocalPlayer.Origin.x, LocalPlayer.Origin.y, LocalPlayer.Origin.z,
+      Player[i].Origin.x, Player[i].Origin.y, Player[i].Origin.z);
+
+      Width   := Round(18100 / Distance);
+      Height  := Round(36000 / Distance);
+
+      if LocalPlayer.fFlags = 775 then
+      begin
+        Width  := Round(10950 / Distance);
+        Height := Round(14000 / Distance);
+      end;
+
+      Brush :=  CreateSolidBrush(RGB(Player[i].Color.R,
+                Player[i].Color.G,Player[i].Color.B));
+
+      DrawBox(Round(Vector.x), Round(Vector.y), Width, Height, 2);
+
+    end;
+  end;
+end;
+
+procedure EXO_HookEngine;
+begin
+{
+  if // Patching:
+  not Hook_SetValue(Hook_GetValue(Engine, oECamera_hack,  8),$2,8) or
+  not Hook_SetValue(Hook_GetValue(Engine, oEEntbox,       8),$1,8) or
+  not Hook_SetValue(Hook_GetValue(Engine, oEWireframe,    8),$1,8)
+  then ErrorMsg(mWMemory);
+}
+end;
+
+function EXO_GetModuleInfo: Boolean;
+begin
+
+  Window := FindWindow('valve001', nil);
+  if not (Window <> 0) then Result := False;
+
+  GetWindowRect(Window, Rect);
+	Desc := GetDC(Window);
+
+  try
+    Thread := GetWindowThreadProcessId(Window, @Process);
+    Handle := OpenProcess(PROCESS_ALL_ACCESS, False, Process);
+  except
+    Result := False;
+  end;
+
+  dwClient  := GetModuleHandle('client.dll');
+  dwPBase   := Hook_GetPoint(dwClient + owPBase, SizeOf(DWORD));
+  W2S_M     := Hook_W2SPoint(dwClient + oW2S_M, SizeOf(WorldToScreenMatrix_t));
+
+  Result := True;
+end;
+
+end.
